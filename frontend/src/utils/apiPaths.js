@@ -1,5 +1,6 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:9001";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:9001"
+).replace(/\/+$/, "");
 const BASE_URL = `${API_BASE_URL}/api`;
 
 export const API_PATHS = {
