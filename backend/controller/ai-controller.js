@@ -100,6 +100,33 @@ const extractJson = (rawText, type) => {
   }
 };
 
+const toQuestionRecord = (item) => {
+  if (typeof item === "string") {
+    const question = item.trim();
+    return question ? { question, answer: "" } : null;
+  }
+
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const question =
+    typeof item.question === "string"
+      ? item.question.trim()
+      : typeof item.title === "string"
+        ? item.title.trim()
+        : "";
+
+  if (!question) {
+    return null;
+  }
+
+  return {
+    question,
+    answer: typeof item.answer === "string" ? item.answer.trim() : "",
+  };
+};
+
 // @desc    Generate + SAVE interview questions for a session
 // @route   POST /api/ai/generate-questions
 // @access  Private
@@ -139,18 +166,32 @@ export const generateInterviewQuestions = async (req, res) => {
       contents: prompt,
     });
 
-    const parts = response.candidates?.[0]?.content?.parts ?? [];
-    const rawText = parts
-      .filter((p) => !p.thought) // gemini-2.5-flash includes thinking parts; skip them
-      .map((p) => p.text ?? "")
-      .join("");
+    const rawText =
+      typeof response.text === "string" && response.text.trim()
+        ? response.text
+        : (response.candidates?.[0]?.content?.parts ?? [])
+            .filter((p) => !p.thought)
+            .map((p) => p.text ?? "")
+            .join("");
 
-    const questions = extractJson(rawText, "array");
+    if (!rawText.trim()) {
+      throw new Error("AI response was empty");
+    }
 
-    if (!Array.isArray(questions)) throw new Error("Response is not an array");
+    const parsedQuestions = extractJson(rawText, "array");
+
+    if (!Array.isArray(parsedQuestions)) {
+      throw new Error("Response is not an array");
+    }
+
+    const questions = parsedQuestions.map(toQuestionRecord).filter(Boolean);
+
+    if (questions.length === 0) {
+      throw new Error("AI response did not contain valid questions");
+    }
 
     //! 4. save to DB — was completely missing before
-    if (session.questions.length > 0) {
+    if ((session.questions ?? []).length > 0) {
       await Question.deleteMany({ session: sessionId });
       session.questions = [];
     }
